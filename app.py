@@ -39,7 +39,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# BASE DE DONNÉES UTILISATEURS EN SESSION (AVEC CHANGEMENT DE MOT DE PASSE)
+# BASE DE DONNÉES UTILISATEURS EN SESSION
 # -----------------------------------------------------------------------------
 if "users_db" not in st.session_state:
     st.session_state["users_db"] = {
@@ -86,21 +86,22 @@ st.sidebar.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-st.sidebar.info(f"Connecté en tant que : **{st.session_state.get('user_name')}**")
+st.sidebar.info(f"Connecté en tant que : **{st.session_state.get('user_name', 'Administrateur')}**")
 
 if st.sidebar.button("🔒 Se déconnecter", use_container_width=True):
     st.session_state["authentifie"] = False
+    st.session_state["current_user"] = "admin"
     st.rerun()
 
-# --- MODULE DE CHANGEMENT DE MOT DE PASSE ---
+# --- MODULE DE CHANGEMENT DE MOT DE PASSE CORRIGÉ ---
 with st.sidebar.expander("🔑 Modifier mon mot de passe"):
     ancien_mdp = st.text_input("Ancien mot de passe", type="password", key="old_pwd")
     nouveau_mdp = st.text_input("Nouveau mot de passe", type="password", key="new_pwd")
     confirmer_mdp = st.text_input("Confirmer le nouveau", type="password", key="conf_pwd")
     
     if st.button("Mettre à jour le mot de passe"):
-        curr_user = st.session_state["current_user"]
-        if ancien_mdp == st.session_state["users_db"][curr_user]["password"]:
+        curr_user = st.session_state.get("current_user", "admin")
+        if curr_user in st.session_state["users_db"] and ancien_mdp == st.session_state["users_db"][curr_user]["password"]:
             if nouveau_mdp and nouveau_mdp == confirmer_mdp:
                 st.session_state["users_db"][curr_user]["password"] = nouveau_mdp
                 st.success("Mot de passe modifié avec succès !")
@@ -229,7 +230,7 @@ df_equipes['Dispo'] = df_equipes['ID_Equipe'].map(equipes_dispos_status)
 # INTERFACE PRINCIPALE
 # -----------------------------------------------------------------------------
 st.markdown('<div class="main-header">🚚 ISA Plus — Planning de Distribution & Gestion des Charges</div>', unsafe_allow_html=True)
-st.markdown(f'<div class="sub-header">Système Multi-Agents d\'optimisation logistique | Connecté en tant que : <b>{st.session_state.get("user_name")}</b></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="sub-header">Système Multi-Agents d\'optimisation logistique | Connecté en tant que : <b>{st.session_state.get("user_name", "Utilisateur")}</b></div>', unsafe_allow_html=True)
 
 JOURS_FR = {"Monday": "Lundi", "Tuesday": "Mardi", "Wednesday": "Mercredi", "Thursday": "Jeudi", "Friday": "Vendredi", "Saturday": "Samedi", "Sunday": "Dimanche"}
 
@@ -365,7 +366,7 @@ with tab_maps:
 
 with tab_qa:
     st.markdown("### 🤖 Contrôle Qualité & Sécurité")
-    st.success("✅ Module de modification de mot de passe intégré dans la barre latérale.")
+    st.success("✅ Erreur de session corrigée (KeyError résolu).")
 
 with tab_export:
     st.markdown("### 📥 Export")
