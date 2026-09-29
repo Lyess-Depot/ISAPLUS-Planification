@@ -4,3 +4,4 @@ requests
 ortools
 xlsxwriter
 streamlit-authenticator
+openpyxl
