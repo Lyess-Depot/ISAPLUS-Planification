@@ -120,10 +120,10 @@ def get_demo_data():
         {"ID_Commande": "CMD-104", "Client_Document": "Livry Gargan Bulletin", "Secteur": "LIVRY_DE", "Volume": 8400, "Date_Debut": "2026-10-06", "Date_Fin": "2026-10-08"}
     ])
     df_eq = pd.DataFrame([
-        {"ID_Equipe": "ABOU", "Responsable": "Abou", "Nb_Agents": 2.0, "Capacite_Nominale": 9000, "Score_SEVRAN_SD": 85, "Score_AULNAY_B": 70, "Score_COURBEVOIE_A": 60, "Score_LIVRY_DE": 80, "Dispo": "OUI"},
-        {"ID_Equipe": "DAN", "Responsable": "Dan", "Nb_Agents": 1.0, "Capacite_Nominale": 4500, "Score_SEVRAN_SD": 60, "Score_AULNAY_B": 90, "Score_COURBEVOIE_A": 50, "Score_LIVRY_DE": 65, "Dispo": "OUI"},
-        {"ID_Equipe": "CRISTIAN", "Responsable": "Cristian", "Nb_Agents": 1.0, "Capacite_Nominale": 4500, "Score_SEVRAN_SD": 50, "Score_AULNAY_B": 75, "Score_COURBEVOIE_A": 95, "Score_LIVRY_DE": 70, "Dispo": "OUI"},
-        {"ID_Equipe": "GHEORGHE", "Responsable": "Gheorghe", "Nb_Agents": 3.0, "Capacite_Nominale": 13500, "Score_SEVRAN_SD": 40, "Score_AULNAY_B": 80, "Score_COURBEVOIE_A": 90, "Score_LIVRY_DE": 90, "Dispo": "OUI"}
+        {"ID_Equipe": "EQUIPE 01", "Responsable": "Mirtcha", "Nb_Agents": 2.0, "Capacite_Nominale": 9000, "Score_SEVRAN_SD": 85, "Score_AULNAY_B": 70, "Score_COURBEVOIE_A": 60, "Score_LIVRY_DE": 80, "Dispo": "OUI"},
+        {"ID_Equipe": "EQUIPE 02", "Responsable": "Michel", "Nb_Agents": 1.0, "Capacite_Nominale": 4500, "Score_SEVRAN_SD": 60, "Score_AULNAY_B": 90, "Score_COURBEVOIE_A": 50, "Score_LIVRY_DE": 65, "Dispo": "OUI"},
+        {"ID_Equipe": "EQUIPE 03", "Responsable": "Cristian", "Nb_Agents": 1.0, "Capacite_Nominale": 4500, "Score_SEVRAN_SD": 50, "Score_AULNAY_B": 75, "Score_COURBEVOIE_A": 95, "Score_LIVRY_DE": 70, "Dispo": "OUI"},
+        {"ID_Equipe": "EQUIPE 04", "Responsable": "Gheorghe", "Nb_Agents": 3.0, "Capacite_Nominale": 13500, "Score_SEVRAN_SD": 40, "Score_AULNAY_B": 80, "Score_COURBEVOIE_A": 90, "Score_LIVRY_DE": 90, "Dispo": "OUI"}
     ])
     return df_cmd, df_eq
 
@@ -144,7 +144,7 @@ else:
     df_equipes = st.session_state['df_equipes']
 
 # -----------------------------------------------------------------------------
-# DISPONIBILITÉS ÉQUIPES & PARAMÈTRES
+# DISPONIBILITÉS ÉQUIPES
 # -----------------------------------------------------------------------------
 st.sidebar.markdown("---")
 st.sidebar.subheader("👥 Disponibilité des Équipes")
@@ -154,7 +154,7 @@ for idx, row in df_equipes.iterrows():
     resp_name = str(row['Responsable'])
     val_disp = row.get('Dispo', True)
     default_val = val_disp.upper() in ["OUI", "TRUE", "1", "YES"] if isinstance(val_disp, str) else bool(val_disp)
-    is_active = st.sidebar.checkbox(f"Équipe {eq_code} ({resp_name})", value=default_val, key=f"dispo_{eq_code}")
+    is_active = st.sidebar.checkbox(f"{eq_code} ({resp_name})", value=default_val, key=f"dispo_{eq_code}")
     equipes_dispos_status[eq_code] = is_active
 
 df_equipes['Dispo'] = df_equipes['ID_Equipe'].map(equipes_dispos_status)
@@ -164,19 +164,18 @@ df_equipes['Dispo'] = df_equipes['ID_Equipe'].map(equipes_dispos_status)
 # -----------------------------------------------------------------------------
 def resoudre_planning_multi_agents(df_cmd, df_eq):
     model = cp_model.CpModel()
-    dates_horizon = [date(2026, 10, 5) + timedelta(days=i) for i in range(5)]
+    dates_horizon = [date(2026, 10, 1) + timedelta(days=i) for i in range(15)]
     commandes = df_cmd.to_dict('records')
     equipes = df_eq[df_eq['Dispo'] == True].to_dict('records')
     if not equipes: return pd.DataFrame()
 
-    x_vol, z_eq_cmd = {}, {}
+    x_vol = {}
     for cmd in commandes:
         cmd_id = cmd['ID_Commande']
         d_debut = datetime.strptime(str(cmd['Date_Debut'])[:10], "%Y-%m-%d").date()
         d_fin = datetime.strptime(str(cmd['Date_Fin'])[:10], "%Y-%m-%d").date()
         for eq in equipes:
             eq_id = eq['ID_Equipe']
-            z_eq_cmd[(cmd_id, eq_id)] = model.NewBoolVar(f"z_{cmd_id}_{eq_id}")
             for j in dates_horizon:
                 if d_debut <= j <= d_fin:
                     cap_eff = int(float(eq['Capacite_Nominale']) * 1.10)
@@ -198,8 +197,8 @@ def resoudre_planning_multi_agents(df_cmd, df_eq):
     for (cmd_id, eq_id, j), var_vol in x_vol.items():
         cmd_info = next(c for c in commandes if c['ID_Commande'] == cmd_id)
         score = next(e for e in equipes if e['ID_Equipe'] == eq_id).get(f"Score_{cmd_info['Secteur']}", 50)
-        day_idx = (j - date(2026, 10, 5)).days
-        obj_terms.append(var_vol * (int(score) + (5 - day_idx) * 500))
+        day_idx = (j - date(2026, 10, 1)).days
+        obj_terms.append(var_vol * (int(score) + (15 - day_idx) * 500))
 
     model.Maximize(sum(obj_terms))
     solver = cp_model.CpSolver()
@@ -221,12 +220,26 @@ def resoudre_planning_multi_agents(df_cmd, df_eq):
                 vol_cumule = totaux_cumules[(eq_id, j)]
                 cap_nominale = int(eq_info['Capacite_Nominale'])
                 taux_pct = round((vol_cumule / cap_nominale) * 100) if cap_nominale > 0 else 0
-                badge = f"🟢 {taux_pct}%" if taux_pct <= 50 else (f"🟠 {taux_pct}%" if taux_pct <= 80 else f"🔴 {taux_pct}%")
+
+                # Code couleur selon les seuils demandés
+                if taux_pct <= 50:
+                    couleur = "Vert"
+                    badge = f"🟢 {taux_pct}%"
+                elif taux_pct <= 80:
+                    couleur = "Orange"
+                    badge = f"🟠 {taux_pct}%"
+                elif taux_pct <= 95:
+                    couleur = "Rouge"
+                    badge = f"🔴 {taux_pct}%"
+                else:
+                    couleur = "Noir"
+                    badge = f"⬛ {taux_pct}%"
 
                 results.append({
                     "Date": j.strftime("%Y-%m-%d"), "Équipe": eq_id, "Responsable": eq_info['Responsable'],
-                    "Client_Document": cmd_info['Client_Document'], "Secteur": cmd_info['Secteur'],
-                    "Volume_Distribué": val, "Capacité_Nominale": cap_nominale, "Indicateur_Charge": badge
+                    "Ressources": eq_info['Nb_Agents'], "Client_Document": cmd_info['Client_Document'],
+                    "Secteur": cmd_info['Secteur'], "Volume_Distribué": val, "Capacité_Nominale": cap_nominale,
+                    "Taux_Charge_%": taux_pct, "Niveau_Couleur": couleur, "Indicateur_Charge": badge
                 })
     return pd.DataFrame(results)
 
@@ -235,9 +248,9 @@ df_resultat = resoudre_planning_multi_agents(df_commandes, df_equipes)
 # -----------------------------------------------------------------------------
 # INTERFACE
 # -----------------------------------------------------------------------------
-st.markdown('<div class="main-header">🚚 ISA Plus — Planning & Maquette Officielle</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🚚 ISA Plus — Planning & Maquette Officielle Conforme</div>', unsafe_allow_html=True)
 
-tab_planning, tab_export = st.tabs(["📅 Planning Généré", "📥 Export Maquette Excel"])
+tab_planning, tab_export = st.tabs(["📅 Planning Généré", "📥 Export Maquette Excel Identique"])
 
 with tab_planning:
     if not df_resultat.empty:
@@ -246,37 +259,93 @@ with tab_planning:
         st.error("⚠️ Capacité insuffisante.")
 
 with tab_export:
-    st.markdown("### 📥 Télécharger au format maquette multi-onglets")
+    st.markdown("### 📥 Télécharger le classeur au format exact de votre maquette")
     if not df_resultat.empty:
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-            # 1. Onglet RECAP global
-            df_recap = df_resultat.groupby(["Équipe", "Responsable"])["Volume_Distribué"].sum().reset_index()
-            df_recap.columns = ["EQUIPES", "RESPONSABLE", "VOLUME TOTAL HT"]
-            df_recap.to_excel(writer, sheet_name='RECAP', index=False)
+            workbook = writer.book
             
-            # 2. Onglets par Équipe au format maquette
-            for eq_id in df_resultat["Équipe"].unique():
-                df_eq_data = df_resultat[df_resultat["Équipe"] == eq_id][["Date", "Secteur", "Client_Document", "Volume_Distribué"]]
-                df_eq_data.columns = ["MOIS", "VILLE", "CLIENT - DOC", "QTE"]
-                sheet_name_clean = str(eq_id)[:31] # Excel limite les noms d'onglets à 31 caractères
-                df_eq_data.to_excel(writer, sheet_name=sheet_name_clean, index=False)
-                
-            # 3. Onglets journaliers (1 à 31)
+            # Formats de cellules et couleurs demandées
+            fmt_header = workbook.add_format({'bold': True, 'bg_color': '#D9D9D9', 'border': 1, 'align': 'center'})
+            fmt_vert = workbook.add_format({'bg_color': '#DCFCE7', 'font_color': '#166534', 'align': 'center'})
+            fmt_orange = workbook.add_format({'bg_color': '#FFEDD5', 'font_color': '#9A3412', 'align': 'center'})
+            fmt_rouge = workbook.add_format({'bg_color': '#FEE2E2', 'font_color': '#991B1B', 'align': 'center'})
+            fmt_noir = workbook.add_format({'bg_color': '#18181B', 'font_color': '#FFFFFF', 'align': 'center'})
+
+            # Génération des onglets journaliers (1 à 31) structurés comme la maquette
+            all_equipes = df_equipes['ID_Equipe'].tolist()
+            
             for day_num in range(1, 32):
                 sheet_name = str(day_num)
-                date_str = f"2026-10-{day_num:02d}"
-                df_day = df_resultat[df_resultat["Date"] == date_str][["Équipe", "Client_Document", "Volume_Distribué"]]
-                if not df_day.empty:
-                    df_day.columns = ["EQUIPE", "CLIENT - DOC", "VOLUME"]
-                else:
-                    df_day = pd.DataFrame(columns=["EQUIPE", "CLIENT - DOC", "VOLUME"])
-                df_day.to_excel(writer, sheet_name=sheet_name, index=False)
+                date_obj = date(2026, 10, day_num)
+                date_str = date_obj.strftime("%Y-%m-%d")
+                
+                # Tableau récapitulatif des équipes pour ce jour
+                rows_day = []
+                df_day_res = df_resultat[df_resultat['Date'] == date_str]
+                
+                for eq in all_equipes:
+                    eq_row = df_equipes[df_equipes['ID_Equipe'] == eq].iloc[0]
+                    ress = eq_row['Nb_Agents']
+                    
+                    match_res = df_day_res[df_day_res['Équipe'] == eq]
+                    if not match_res.empty:
+                        vol = match_res.iloc[0]['Volume_Distribué']
+                        doc = match_res.iloc[0]['Client_Document']
+                        secteur = match_res.iloc[0]['Secteur']
+                        couleur = match_res.iloc[0]['Niveau_Couleur']
+                    else:
+                        vol = 0
+                        doc = ""
+                        secteur = ""
+                        couleur = "Vert"
+
+                    rows_day.append({
+                        "CHARGEMENT Sous-Traitants": eq,
+                        "RESS": ress,
+                        "VOLUME": vol,
+                        "PARTAGE": "",
+                        "DOCUMENTS": doc,
+                        "SECTEUR": secteur,
+                        "STATUT_COULEUR": couleur
+                    })
+                
+                df_sheet = pd.DataFrame(rows_day)
+                
+                # Écriture dans l'onglet avec la date en haut (exactement comme le modèle)
+                worksheet = workbook.add_worksheet(sheet_name)
+                writer.sheets[sheet_name] = worksheet
+                
+                # En-tête date
+                worksheet.write(0, 5, datetime(2026, 10, day_num), workbook.add_format({'num_format': 'yyyy-mm-dd', 'bold': True}))
+                
+                # En-têtes de colonnes
+                headers = ["", "EQUIPE", "RESS", "VOLUME", "PARTAGE", "DOCUMENTS", "SECTEUR"]
+                for col_idx, h in enumerate(headers):
+                    worksheet.write(1, col_idx, h, fmt_header)
+                
+                # Lignes de données
+                for r_idx, row in df_sheet.iterrows():
+                    row_num = r_idx + 2
+                    worksheet.write(row_num, 1, row["CHARGEMENT Sous-Traitants"])
+                    worksheet.write(row_num, 2, row["RESS"])
+                    worksheet.write(row_num, 3, row["VOLUME"])
+                    worksheet.write(row_num, 4, row["PARTAGE"])
+                    worksheet.write(row_num, 5, row["DOCUMENTS"])
+                    worksheet.write(row_num, 6, row["SECTEUR"])
+                    
+                    # Application du code couleur sur la ligne selon la charge
+                    c = row["STATUT_COULEUR"]
+                    cell_fmt = fmt_vert
+                    if c == "Orange": cell_fmt = fmt_orange
+                    elif c == "Rouge": cell_fmt = fmt_rouge
+                    elif c == "Noir": cell_fmt = fmt_noir
+                    worksheet.write(row_num, 0, c, cell_fmt)
 
         st.download_button(
-            "📥 Télécharger la Maquette Excel Complète (.xlsx)",
+            "📥 Télécharger la Maquette Excel Conforme (.xlsx)",
             data=buffer.getvalue(),
-            file_name="CR_ISAPLUS_Maquette_Conforme.xlsx",
+            file_name="CR_ISAPLUS_Maquette_Identique.xlsx",
             mime="application/vnd.ms-excel"
         )
     else:
